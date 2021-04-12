@@ -1,29 +1,46 @@
 #include <Servo.h>
 #include <SoftwareSerial.h>
 #include <Wire.h>
-#include <MPU6050_tockn.h>
 #include <ArduinoJson.h>
 Servo ser;
 Servo ser1;
-int s2 = 7;
-int s2a;
-MPU6050 mpu6050(Wire);
+int s2 = 10;
+int s1 = 9;
+int b, c;
+  float x = 0, y = 0, z = 0;
+  int16_t rx, ry, rz;
+  float gyroXoffset, gyroYoffset, gyroZoffset;
+  float accX, accY, accZ, gyroX, gyroY, gyroZ;
+
+  float angleGyroX, angleGyroY, angleGyroZ,
+  angleAccX, angleAccY, angleAccZ;
+
+  float angleX, angleY, angleZ;
+float  accCoef = 0.02f;
+float  gyroCoef = 0.98f;
+    float interval;
+  long preInterval;
+
+
+long gX, gY, gZ;
+int b;
+float roX, roY, roZ;
+float rgx, rgy, rgz, rax, ray, raz, temp;
 SoftwareSerial s(5, 6);
-int a = 3;
 String str;
 void setup() {
-  Serial.begin(4800);
-  s.begin(4800);
+  Serial.begin(9600);
+  s.begin(9600);
   Wire.begin();
-  mpu6050.begin();
-  mpu6050.calcGyroOffsets(true);
- 
- 
-    ser.attach(a);
-  ser.write(90);
+   Wire.begin();
+  setupMPU();
+  cgo();
+  
+   ser.attach(s1);
+    ser.write(90);
     ser1.attach(s2);
-  ser1.write(90);
-  delay(100);
+    ser1.write(90);
+ 
   
 }
 
@@ -31,11 +48,9 @@ void loop() {
   // put your main code here, to run repeatedly:
 
   mpu6050.update();
- int b = mpu6050.getAngleY();
- int c = mpu6050.getAngleX();
-  ser1.write(90 + (b));
-  ser.write(90 + (c));
-  if(b > 180){
+ b = mpu6050.angleY();
+ c = mpu6050.angleX();
+   if(b > 180){
     b = 180;
     }
   else if(b < -180){
@@ -45,21 +60,140 @@ void loop() {
     return;
     }
     if(c > 180){
-    b = 180;
+    c = 180;
     }
   else if(c < -180){
-    b = -180;
+    c = -180;
     }
   else if(c == 0){
     return;
     }
+  ser.write(90 + b);
+  ser1.write(90 + c);
  StaticJsonDocument<100> doc;
    JsonObject root = doc.to<JsonObject>();
    root["roll"] = b;
    root["pitch"] = c;
-   serializeJson(doc,s);
+  serializeJson(doc,s);
  str = String(b) + String(",") + String(c);
   Serial.println(str);
+
   
 
 }
+void setupMPU(){
+Wire.beginTransmission(0b1101000);
+Wire.write(0x6B);
+Wire.write(0b00000001);
+Wire.endTransmission();
+Wire.beginTransmission(0b1101000);
+Wire.write(0x1B);
+Wire.write(0x08);
+Wire.endTransmission();
+Wire.beginTransmission(0b1101000);
+Wire.write(0x1C);
+Wire.write(0x00);
+Wire.endTransmission();
+Wire.beginTransmission(0b1101000);
+Wire.write(0x19);
+Wire.write(0x00);
+Wire.endTransmission();
+Wire.beginTransmission(0b1101000);
+Wire.write(0x1A);
+Wire.write(0x00);
+Wire.endTransmission();
+  updatemp();
+  angleGyroX = 0;
+  angleGyroY = 0;
+  angleX = angleAccX;
+  angleY = angleAccY;
+   preInterval = millis();
+}
+
+void cgo(){
+
+for(int i = 0; i < 3000; i++)
+{
+  Wire.beginTransmission(0b1101000);
+Wire.write(0x3B);
+Wire.endTransmission();
+Wire.requestFrom(0b1101000,14);
+while(Wire.available() < 14);
+ Wire.read()<<8|Wire.read();
+ Wire.read()<<8|Wire.read();
+ Wire.read()<<8|Wire.read();
+ Wire.read()<<8|Wire.read();
+ rx = Wire.read()<<8|Wire.read();
+ ry = Wire.read()<<8|Wire.read();
+ rz = Wire.read()<<8|Wire.read();
+  
+   x += ((float)rx) / 65.5;
+   y += ((float)ry) / 65.5;
+   z += ((float)rz) / 65.5;
+}
+  
+co();  
+}
+void co(){
+  gyroXoffset = x / 3000;
+  gyroYoffset = y / 3000;
+  gyroZoffset = z / 3000;
+
+ 
+    Serial.println();
+    Serial.println("Done!!!");
+    Serial.print("X : ");Serial.println(gyroXoffset);
+    Serial.print("Y : ");Serial.println(gyroYoffset);
+    Serial.print("Z : ");Serial.println(gyroZoffset);
+    Serial.println("Program will start after 3 seconds");
+    Serial.print("========================================");
+    delay(3000);
+
+  }
+
+
+void updatemp(){
+Wire.beginTransmission(0b1101000);
+Wire.write(0x3B);
+Wire.endTransmission();
+Wire.requestFrom(0b1101000,14);
+while(Wire.available()<14);
+rax =  Wire.read()<<8|Wire.read();
+ray = Wire.read()<<8|Wire.read();
+raz =  Wire.read()<<8|Wire.read();
+temp =  Wire.read()<<8|Wire.read();
+rgx = Wire.read()<<8|Wire.read();
+rgy = Wire.read()<<8|Wire.read();
+rgz = Wire.read()<<8|Wire.read();
+
+ temp = (temp + 12412.0) / 340.0;   
+
+  accX = ((float)rax) / 16384.0;
+  accY = ((float)ray) / 16384.0;
+  accZ = ((float)raz) / 16384.0;
+
+  angleAccX = atan2(accY, accZ + abs(accX)) * 360 / 2.0 / PI;
+  angleAccY = atan2(accX, accZ + abs(accY)) * 360 / -2.0 / PI;
+
+  gyroX = ((float)rgx) / 65.5;
+  gyroY = ((float)rgy) / 65.5;  
+  gyroZ = ((float)rgz) / 65.5;
+
+  gyroX -= gyroXoffset;
+  gyroY -= gyroYoffset;
+  gyroZ -= gyroZoffset;
+
+  interval = (millis() - preInterval) * 0.001;
+
+  angleGyroX += gyroX * interval;
+  angleGyroY += gyroY * interval;
+  angleGyroZ += gyroZ * interval;
+
+  angleX = (gyroCoef * (angleX + gyroX * interval)) + (accCoef * angleAccX);
+  angleY = (gyroCoef * (angleY + gyroY * interval)) + (accCoef * angleAccY);
+  angleZ = angleGyroZ;
+
+  preInterval = millis();
+  
+
+    }
